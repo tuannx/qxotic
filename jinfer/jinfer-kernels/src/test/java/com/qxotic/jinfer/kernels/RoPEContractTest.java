@@ -91,6 +91,61 @@ class RoPEContractTest {
         }
     }
 
+    @Test
+    void vectorizedApplyNeoxMatchesDefinitionAcrossMultipleLaneSizes() {
+        int[] testLanes = {4, 7, 8, 15, 16, 32, 64, 128};
+        for (int lanes : testLanes) {
+            int headSize = lanes * 2;
+            try (Arena arena = Arena.ofConfined()) {
+                MemoryArena<MemorySegment> memory = MemoryAllocators.ofArena(arena);
+                MemoryView<MemorySegment> cos = Views.allocateF32(memory, lanes);
+                MemoryView<MemorySegment> sin = Views.allocateF32(memory, lanes);
+                RoPE.fill(cos, sin, 5, 1, lanes, RoPE.plain(headSize, THETA));
+                MemoryView<MemorySegment> neox = sequence(memory, headSize);
+                RoPE.applyNeox(neox, 0, 0, cos, sin, lanes);
+
+                for (int j = 0; j < lanes; j++) {
+                    float cv = get(cos, j);
+                    float sv = get(sin, j);
+                    float v0 = j + 1;
+                    float v1 = (j + lanes) + 1;
+                    float expected0 = v0 * cv - v1 * sv;
+                    float expected1 = v0 * sv + v1 * cv;
+                    assertEquals(
+                            expected0, get(neox, j), 1e-5f, "lane " + j + " (lanes=" + lanes + ")");
+                    assertEquals(
+                            expected1,
+                            get(neox, j + lanes),
+                            1e-5f,
+                            "lane " + (j + lanes) + " (lanes=" + lanes + ")");
+                }
+            }
+        }
+    }
+
+    @Test
+    void precomputedTableMatchesDirectFill() {
+        int positions = 32;
+        int lanes = 64;
+        try (Arena arena = Arena.ofConfined()) {
+            MemoryArena<MemorySegment> memory = MemoryAllocators.ofArena(arena);
+            var cos = Views.allocateF32(memory, positions * lanes);
+            var sin = Views.allocateF32(memory, positions * lanes);
+            var schedule = RoPE.plain(lanes * 2, THETA);
+            var table = RoPE.Table.precompute(cos, sin, positions, lanes, schedule);
+
+            var targetCos = Views.allocateF32(memory, lanes);
+            var targetSin = Views.allocateF32(memory, lanes);
+            for (int p : new int[] {0, 1, 15, 31}) {
+                table.copyRow(p, targetCos, targetSin, 0);
+                for (int j = 0; j < lanes; j++) {
+                    assertEquals(get(cos, (long) p * lanes + j), get(targetCos, j), 0f);
+                    assertEquals(get(sin, (long) p * lanes + j), get(targetSin, j), 0f);
+                }
+            }
+        }
+    }
+
     private static void assertTranslationInvariant(RoPE.Schedule schedule) {
         Range whole = fill(0, 300, schedule);
         assertSameRows(whole, 296, fill(296, 4, schedule), 4);
