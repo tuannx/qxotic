@@ -1,11 +1,15 @@
 package com.qxotic.jinfer.kernels;
 
+import static com.qxotic.jinfer.Segments.F_SPECIES;
+import static com.qxotic.jinfer.Segments.USE_VECTOR_API;
 import static com.qxotic.jinfer.Segments.readFloat;
 import static com.qxotic.jinfer.Segments.writeFloat;
 
 import com.qxotic.jota.memory.MemoryView;
 import java.lang.foreign.MemorySegment;
+import java.nio.ByteOrder;
 import java.util.function.IntUnaryOperator;
+import jdk.incubator.vector.FloatVector;
 
 /**
  * Rotary position embeddings over views. Schedules are memory-free; {@code fill}/{@code apply*}
@@ -237,6 +241,45 @@ public final class RoPE {
     }
 
     /**
+     * Precomputed table of cos/sin embeddings over a position range [0, positions). Eliminates
+     * runtime trigonometric evaluations during sequential decode steps.
+     */
+    public record Table(
+            MemoryView<MemorySegment> cos,
+            MemoryView<MemorySegment> sin,
+            int positions,
+            int lanes) {
+
+        public static Table precompute(
+                MemoryView<MemorySegment> cos,
+                MemoryView<MemorySegment> sin,
+                int positions,
+                int lanes,
+                Schedule schedule) {
+            fill(cos, sin, 0, positions, lanes, schedule);
+            return new Table(cos, sin, positions, lanes);
+        }
+
+        public void copyRow(
+                int position,
+                MemoryView<MemorySegment> targetCos,
+                MemoryView<MemorySegment> targetSin,
+                int targetRow) {
+            Raw tc = Raw.f32(targetCos, "targetCos");
+            Raw ts = Raw.f32(targetSin, "targetSin");
+            Raw sc = Raw.f32(cos, "sourceCos");
+            Raw ss = Raw.f32(sin, "sourceSin");
+            long srcOffset = (long) position * lanes * Float.BYTES;
+            long dstOffset = (long) targetRow * lanes * Float.BYTES;
+            long bytes = (long) lanes * Float.BYTES;
+            MemorySegment.copy(
+                    sc.vseg(), sc.vbase() + srcOffset, tc.vseg(), tc.vbase() + dstOffset, bytes);
+            MemorySegment.copy(
+                    ss.vseg(), ss.vbase() + srcOffset, ts.vseg(), ts.vbase() + dstOffset, bytes);
+        }
+    }
+
+    /**
      * Rotate-half (NEOX) rotation of one head: pairs dim {@code j} with {@code j + lanes} - the
      * layout HF and gpt-oss apply directly, with no conversion-time permutation.
      */
@@ -251,6 +294,54 @@ public final class RoPE {
         Raw c = Raw.f32(cos, "cos");
         Raw s = Raw.f32(sin, "sin");
         long base = (long) row * lanes;
+        if (USE_VECTOR_API) {
+            var species = F_SPECIES;
+            int upperBound = species.loopBound(lanes);
+            int j = 0;
+            for (; j < upperBound; j += species.length()) {
+                var cv =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                c.vseg(),
+                                c.vbase() + (base + j) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var sv =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                s.vseg(),
+                                s.vbase() + (base + j) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                long i = headOffset + j;
+                var v0 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                qv.vseg(),
+                                qv.vbase() + i * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var v1 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                qv.vseg(),
+                                qv.vbase() + (i + lanes) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var out0 = v0.mul(cv).sub(v1.mul(sv));
+                var out1 = v0.mul(sv).add(v1.mul(cv));
+                out0.intoMemorySegment(
+                        qv.vseg(), qv.vbase() + i * Float.BYTES, ByteOrder.LITTLE_ENDIAN);
+                out1.intoMemorySegment(
+                        qv.vseg(), qv.vbase() + (i + lanes) * Float.BYTES, ByteOrder.LITTLE_ENDIAN);
+            }
+            for (; j < lanes; j++) {
+                float cv = readFloat(c.vseg(), c.vbase() + (base + j) * Float.BYTES);
+                float sv = readFloat(s.vseg(), s.vbase() + (base + j) * Float.BYTES);
+                long i = headOffset + j;
+                float v0 = readFloat(qv.vseg(), qv.vbase() + i * Float.BYTES);
+                float v1 = readFloat(qv.vseg(), qv.vbase() + (i + lanes) * Float.BYTES);
+                writeFloat(qv.vseg(), qv.vbase() + i * Float.BYTES, v0 * cv - v1 * sv);
+                writeFloat(qv.vseg(), qv.vbase() + (i + lanes) * Float.BYTES, v0 * sv + v1 * cv);
+            }
+            return;
+        }
         for (int j = 0; j < lanes; j++) {
             float cv = readFloat(c.vseg(), c.vbase() + (base + j) * Float.BYTES);
             float sv = readFloat(s.vseg(), s.vbase() + (base + j) * Float.BYTES);
