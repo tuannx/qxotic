@@ -3,7 +3,9 @@ package com.qxotic.toknroll.impl;
 import com.qxotic.toknroll.ByteLevel;
 import com.qxotic.toknroll.IntSequence;
 import com.qxotic.toknroll.Vocabulary;
-import java.lang.reflect.Method;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
@@ -29,7 +31,7 @@ final class TiktokenModel extends AbstractTokenizationModel {
     private static final int SCRATCH_MAX_RETAINED_ELEMENTS = 128 * 1024;
     private static final int NO_TOKEN = -1;
     private static final int NO_INDEX = -1;
-    private static final Method THREAD_IS_VIRTUAL_METHOD = resolveThreadIsVirtualMethod();
+    private static final MethodHandle THREAD_IS_VIRTUAL_HANDLE = resolveThreadIsVirtualHandle();
 
     private final LongLongMap merges;
     private final int[] singleByteTokenId;
@@ -336,22 +338,22 @@ final class TiktokenModel extends AbstractTokenizationModel {
         }
     }
 
-    private static Method resolveThreadIsVirtualMethod() {
+    private static MethodHandle resolveThreadIsVirtualHandle() {
         try {
-            return Thread.class.getMethod("isVirtual");
-        } catch (NoSuchMethodException e) {
+            return MethodHandles.publicLookup()
+                    .findVirtual(Thread.class, "isVirtual", MethodType.methodType(boolean.class));
+        } catch (ReflectiveOperationException e) {
             return null;
         }
     }
 
     private static boolean isCurrentThreadVirtual() {
-        if (THREAD_IS_VIRTUAL_METHOD == null) {
+        if (THREAD_IS_VIRTUAL_HANDLE == null) {
             return false;
         }
         try {
-            return Boolean.TRUE.equals(THREAD_IS_VIRTUAL_METHOD.invoke(Thread.currentThread()));
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            // Thread.isVirtual() may not exist on Java < 19. Assume virtual threads aren't in use.
+            return (boolean) THREAD_IS_VIRTUAL_HANDLE.invokeExact(Thread.currentThread());
+        } catch (Throwable e) {
             return false;
         }
     }
