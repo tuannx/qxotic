@@ -1,0 +1,30 @@
+---
+description: Use arcade-agent for architecture checks, modularity, and structural alignment with qxotic
+alwaysApply: true
+---
+
+# Arcade architecture alignment
+
+When checking architecture, modularity, smells, blast radius, or placing new code so it aligns with the current project structure, use the `arcade-agent` MCP tools or `./scripts/architecture-audit.sh` before guessing from file trees alone.
+
+## Default workflow
+
+1. Use `./scripts/architecture-audit.sh` to run static architecture analysis on the repository root (`.`) using Java and the `pkg` recovery algorithm.
+2. For baseline comparisons against `main`, run:
+   ```bash
+   ./scripts/architecture-audit.sh --compare
+   ```
+3. When using MCP `arcade-agent` tools, chain `ingest` → `parse` → `recover` → `detect_smells` / `compute_metrics` / `explain_component` / `query`, reusing returned `session_id` values between tools.
+4. For concrete refactors or additions, use `context_for_task`, `diff_impact`, or `dependency_cone` to evaluate component impact.
+
+## Canonical Metrics Baseline
+
+- **Repository**: `qxotic`
+- **Language**: `java`
+- **Algorithm**: `pkg`
+- **Arcade Agent Version**: `0.3.0`
+- **BalancedArchitectureScore**: `~0.5352`
+- **RCI**: `0.8909`
+- **TurboMQ**: `5.1438`
+- **Entities**: 8837 (717 classes, 8021 methods) across 943 files
+- **Components (7)**: `Default`, `Format`, `Jam`, `Jinfer`, `Jota`, `Json`, `Toknroll`

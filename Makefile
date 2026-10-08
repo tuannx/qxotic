@@ -138,6 +138,14 @@ release-deploy: ## Stage for Central what it does not hold yet: PROJECT=. for ev
 jam-natives: ## Build, stage and stamp every shipped libjam (linux/windows x86-64 here, darwin-aarch64 on JAM_MAC=user@mac over ssh)
 	jam/jam-native/scripts/natives.sh build
 
+##@ Architecture
+
+arch-audit: ## Run arcade-agent architecture analysis on qxotic
+	./scripts/architecture-audit.sh
+
+arch-compare: ## Compare current architecture against canonical baseline
+	./scripts/architecture-audit.sh --compare
+
 ##@ Miscellaneous
 
 examples: ## Build the demo apps (already in the default reactor; this target just limits the build to them)
@@ -152,4 +160,5 @@ help: ## Show this help
 	@echo '  Subtrees: make -C jinfer help (run, test-golden, ...) | make -C jota help | make -C jinfer/jinfer-tts native'
 
 .PHONY: default help package compile install jar jinfer-jar test jinfer-test jota-test \
-	jam-test native format clean jinfer-clean jota-clean examples release-canary jam-natives toknroll-fixtures test-fixtures ci ci-format ci-test ci-corpus ci-release release-plan release-deploy
+	jam-test native format clean jinfer-clean jota-clean examples release-canary jam-natives toknroll-fixtures test-fixtures ci ci-format ci-test ci-corpus ci-release release-plan release-deploy \
+	arch-audit arch-compare

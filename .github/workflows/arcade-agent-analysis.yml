@@ -1,0 +1,29 @@
+name: Arcade Architecture Analysis
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  architecture-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Run arcade-agent
+        uses: lemduc/arcade-agent/actions/analyze@576e412dadd6f752f3a5f886201a7e80db93407f
+        with:
+          arcade-agent-version: "0.3.0"
+          source-path: .
+          language: java
+          repo-name: qxotic
+          primary-algorithm: pkg
+          run-secondary-analyses: "true"
+          wca-num-clusters: "7"
