@@ -37,8 +37,44 @@ public final class Norms {
         if (USE_VECTOR_API) {
             var species = F_SPECIES;
             int upperBound = species.loopBound(size);
-            FloatVector acc = FloatVector.zero(species);
+            int step = 4 * species.length();
+            int unrollBound = (size / step) * step;
+            FloatVector acc0 = FloatVector.zero(species);
+            FloatVector acc1 = FloatVector.zero(species);
+            FloatVector acc2 = FloatVector.zero(species);
+            FloatVector acc3 = FloatVector.zero(species);
             int i = 0;
+            for (; i < unrollBound; i += step) {
+                var x0 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var x1 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i + species.length()) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var x2 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i + 2 * species.length()) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var x3 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i + 3 * species.length()) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                acc0 = x0.fma(x0, acc0);
+                acc1 = x1.fma(x1, acc1);
+                acc2 = x2.fma(x2, acc2);
+                acc3 = x3.fma(x3, acc3);
+            }
+            FloatVector acc = acc0.add(acc1).add(acc2).add(acc3);
             for (; i < upperBound; i += species.length()) {
                 var xvv =
                         FloatVector.fromMemorySegment(
@@ -219,8 +255,44 @@ public final class Norms {
         if (USE_VECTOR_API) {
             var species = F_SPECIES;
             int upperBound = species.loopBound(size);
-            FloatVector acc = FloatVector.zero(species);
+            int step = 4 * species.length();
+            int unrollBound = (size / step) * step;
+            FloatVector acc0 = FloatVector.zero(species);
+            FloatVector acc1 = FloatVector.zero(species);
+            FloatVector acc2 = FloatVector.zero(species);
+            FloatVector acc3 = FloatVector.zero(species);
             int i = 0;
+            for (; i < unrollBound; i += step) {
+                var x0 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var x1 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i + species.length()) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var x2 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i + 2 * species.length()) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                var x3 =
+                        FloatVector.fromMemorySegment(
+                                species,
+                                xv.vseg(),
+                                xv.vbase() + (xOffset + i + 3 * species.length()) * Float.BYTES,
+                                ByteOrder.LITTLE_ENDIAN);
+                acc0 = x0.fma(x0, acc0);
+                acc1 = x1.fma(x1, acc1);
+                acc2 = x2.fma(x2, acc2);
+                acc3 = x3.fma(x3, acc3);
+            }
+            FloatVector acc = acc0.add(acc1).add(acc2).add(acc3);
             for (; i < upperBound; i += species.length()) {
                 var xvv =
                         FloatVector.fromMemorySegment(

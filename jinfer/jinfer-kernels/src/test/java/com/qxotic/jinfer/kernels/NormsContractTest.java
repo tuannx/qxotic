@@ -152,6 +152,26 @@ class NormsContractTest {
     }
 
     @Test
+    void sumOfSquaresMatchesDefinitionAcrossVectorAndUnrollTails() {
+        int[] sizes = {1, 7, 15, 16, 31, 32, 63, 64, 127, 128, 255, 513};
+        for (int size : sizes) {
+            try (Arena arena = Arena.ofConfined()) {
+                var memory = MemoryAllocators.ofArena(arena);
+                float[] values = new float[size];
+                double expected = 0;
+                for (int i = 0; i < size; i++) {
+                    values[i] = (float) Math.sin(i + 1);
+                    expected += (double) values[i] * values[i];
+                }
+                var x = Views.fromFloatArray(memory, values);
+                float actual = Norms.sumOfSquares(x, 0, size);
+                assertEquals(
+                        (float) expected, actual, 1e-4f * (float) expected + 1e-6f, "size " + size);
+            }
+        }
+    }
+
+    @Test
     void rejectsWrongDatatype() {
         try (Arena arena = Arena.ofConfined()) {
             var memory = MemoryAllocators.ofArena(arena);
